@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layer Toggler</title>
+    <style>
+        body {
+            margin:0;
+            padding: 0;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100vw;
+        }
+    </style>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+    integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+    crossorigin=""/>
+</head>
+<body>
+    <div id="map">
+
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+    integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+    crossorigin=""></script>
+
+    <script>
+        var map = L.map('map', {
+            minZoom:12
+        }).setView([37.751505, -122.4509], 12);
+
+        // 
+        let layerLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+            attribution:'&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20,
+            minZoom: 0
+        });
+
+        layerLight.addTo(map);
+
+        let layerDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+            attribution:'&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20,
+            minZoom: 0
+        });
+
+        layerDark.addTo(map);
+
+
+        // map layers
+        var neighbourhoods = L.geoJSON(null, {
+            onEachFeature:function(feature, layer) {
+                layer.bindPopup("<b>Neighborhood Name</b> </br>" + feature.properties.nhood);
+            },
+            style:function(feature) {
+                return {
+                    fillColor:"#1b9e77",
+                    weight:1,
+                    color:"#1b9e77"
+                }
+            }
+        }).addTo(map);
+
+        var culturalDistricts = L.geoJSON(null, {
+            onEachFeature:function(feature, layer) {
+                layer.bindPopup("<b>Cultural District Name</b> </br>" + feature.properties.district_name);
+            },
+            style:function(feature) {
+                    return {
+                        weight:1,
+                        fillColor:"#d95f02",
+                        color:"#d95f02"
+                    }
+            }            
+        }).addTo(map);
+
+
+        var schools = L.geoJSON(null, {
+            pointToLayer:function(feature, latLng) {
+                return L.circleMarker(latLng, {
+                    radius:3,
+                    fillOpacity:1,
+                    fillColor:"#e7298a",
+                    color:"transparent"
+                })
+                .bindTooltip(feature.properties['Campus Name']);
+            }
+        }).addTo(map);
+
+        var demographics = L.geoJSON(null, {
+            onEachFeature:function(feature, layer){
+                layer.bindPopup(feature.properties["namelsad10"])
+            },
+            style:function(feature){
+                return {
+                    weight:1,
+                    fillOpacity:0.3,
+                    fillColor:"#7570b3",
+                    color:"#7570b3"
+                }
+            }
+        }).addTo(map);
+
+        
+        // layer toggler
+        var overlay = {
+            "Schools":schools,
+            "Neighborhoods":neighbourhoods,
+            "Cultural Districts":culturalDistricts,
+            "Demographics":demographics
+            // "Historical Zoning Districts":historicalDistricts
+        };
+
+        L.control.layers({
+            "Dark":layerDark,
+            "Light":layerLight
+        }, overlay, {collapsed:false}).addTo(map);
+
+
+        // get the data
+        Object.keys(overlay).reverse().forEach(key => {
+            let filename = `${key}.geojson`;
+
+            fetch(filename)
+            .then(res => res.json())
+            .then(data => {
+                overlay[key].addData(data);
+
+                if(key == "Cultural Districts") {
+                    // console.log("front");
+                    // 
+                }
+
+                culturalDistricts.bringToFront();
+                schools.bringToFront();
+            });
+        });
+
+
+        
+    </script>
+</body>
+</html>
