@@ -161,7 +161,13 @@
 
         var demographics = L.geoJSON(null, {
             onEachFeature:function(feature, layer){
-                layer.bindPopup(feature.properties["namelsad10"])
+                layer.bindPopup(`<div class="popupp-content">
+                    <div class="popup-header">${feature.properties["namelsad10"]}</div>
+
+                    <div class="popup-body">
+                        <div class="popup-item"><b>Popupulation Count</b> ${feature.properties.estimate || "N/A"}</div>
+                    </div>
+                </div>`)
             },
             style:function(feature){
                 return {
