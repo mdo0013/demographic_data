@@ -15,6 +15,58 @@
             height: 100vh;
             width: 100vw;
         }
+
+        .map-title {
+            position: absolute;
+            top:20px;
+            left: 0%;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            margin: 0 auto;
+           
+            z-index: 1000;
+            color: rgba(48, 48, 48, 0.838);
+            /* background-color: rgb(231, 231, 231); */
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .layer-toggler {
+            position: absolute;
+            display: none;
+            z-index: 1000;
+            top:150px;
+            right:0px;
+            margin:10px;
+            width: 240px;
+            border-radius: 5px;
+            min-height: 200px;
+            background-color: white;
+            border: 2px solid rgba(0,0,0,0.2);
+        }
+
+        .layer-toggler .title {
+            padding:0.25rem;
+            text-align: center;
+        }
+
+        .layer-toggler .toggler-body {
+            padding:0.5rem;
+        }
+
+        .layer-toggler .toggler-body .input-div {
+            display: flex;
+            font-size: 12px;
+            align-items: center;
+            padding:0.1rem;
+            /* justify-content: center; */
+        }
+
+        .input-div input {
+            margin:0px;
+            margin-right: 5px;
+        }
     </style>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
@@ -23,7 +75,18 @@
 </head>
 <body>
     <div id="map">
+        <div class="map-title">SFUSD Schools and Cultural Districts</div>
 
+        <div class="layer-toggler" id="layer-section">
+            <div class="title">Demographics Data</div>
+
+            <div class="toggler-body" id="toggler-body">
+                <div class="input-div">
+                    <input type="radio" name="demographics" id="asian" />
+                    <label for="asian">Asian</label>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
@@ -31,6 +94,7 @@
     crossorigin=""></script>
 
     <script>
+        var demographicsData;
         var map = L.map('map', {
             minZoom:12
         }).setView([37.751505, -122.4509], 12);
@@ -102,12 +166,12 @@
             style:function(feature){
                 return {
                     weight:1,
-                    fillOpacity:0.3,
+                    fillOpacity:0.6,
                     fillColor:"#7570b3",
-                    color:"#7570b3"
+                    color:"#f2f2f2"
                 }
             }
-        });
+        })
         // .addTo(map);
 
         
@@ -116,7 +180,7 @@
             "Schools":schools,
             "Neighborhoods":neighbourhoods,
             "Cultural Districts":culturalDistricts,
-            // "Demographics":demographics
+            "Demographics":demographics
             // "Historical Zoning Districts":historicalDistricts
         };
 
@@ -146,7 +210,191 @@
         });
 
 
+        // read the csv data 
+        function loadDemographicsData() {
+            fetch('census_race_datasets.csv')
+            .then(res => res.text())
+            .then(data => {
+                console.log(data);
+
+                let parsedData = parseCSV(data);
+                console.log(parsedData);
+
+                demographicsData = [...parsedData];
+                renderRaceSection(parsedData);
+
+                visualizeDemographicsBy('all demographics');
+            })
+            .catch(console.error);
+        }
+
+        function parseCSV(data) {
+            // create empty array
+            const csvData = [];
+            
+            // this will return each line as an individual String
+            const lines = data.split("\n");
+            let columnNames = lines[0].split(",");
+
+            console.log(lines);
+            console.log(columnNames);
+            console.log(lines[1]);
+            console.log(lines[1].split(/,/));
+
+            let entries = lines.slice(1,).map(line => {
+                let entry = line.replace(/\r/, "").split(",");
+                let dataItem = {};
+
+                entry.forEach((item, i) => {
+                    dataItem[columnNames[i]] = item;
+                });
+
+                return dataItem;
+            });
+
+            //   console.log(columnNames);
+            //   console.log(entries);
+
+            return entries;
+        }
+
+
+        function renderRaceSection(data) {
+            let races = data.map(entry => entry['demographic_category_label']).filter(item => item);
+            races = [...new Set([...races])];
+
+            console.log(races);
+
+            let inputs = races.map((race, i) => {
+                return `<div class="input-div">
+                    <input type="radio" name="demographics" class="form-check" id="race-${i}" data-target="${race}"/>
+                    <label for="race-${i}">${race}</label>
+                </div>`;
+            });
+
+            document.getElementById("toggler-body").innerHTML = inputs.join("");
+
+            fireEventListeners();
+        }
+
+        loadDemographicsData();
+
+
+        function fireEventListeners() {
+            let togglers = document.querySelectorAll(".form-check");
+            console.log(togglers);
+
+            togglers[0].click();
+
+            togglers.forEach(toggler => {
+                toggler.onchange = (e) => {
+                    console.log(e);
+
+                    let { target } = e.target.dataset;
+
+                    visualizeDemographicsBy(target);
+                }
+            })
+        }   
         
+
+        function visualizeDemographicsBy(raceCategory) {
+            // update the data
+            let data = demographicsData.filter(item => item['demographic_category_label'] == raceCategory);
+            // console.log(data);
+
+            // merge the data with the different census tract
+            let geoJSON = demographics.toGeoJSON();
+            let extraFeat = [];
+
+            geoJSON.features = geoJSON.features.map(feature => {
+                let demographicsEntry = data.find(entry => entry['geography_name'] == feature.properties['namelsad10']);
+
+                if(demographicsEntry) {
+                    // console.log(feature)
+                    feature.properties = { ...feature.properties, ...demographicsEntry };
+                } else {
+                    extraFeat.push(feature);
+                }
+
+                return feature;
+            });
+
+            // console.log(geoJSON.features);
+            console.log(extraFeat);
+
+            demographics.clearLayers();
+            demographics.addData(geoJSON);
+
+            console.log("Data Update");
+
+
+            demographics.eachLayer(layer => {
+                layer.setStyle({
+                    fillColor:getFillColor(layer.feature, 'estimate', raceCategory)
+                })
+            });
+
+        }
+
+        function getFillColor(feature, columnName, category) {
+            // console.log(feature);
+
+            let colors = ['#f7f4f9','#e7e1ef','#d4b9da','#c994c7','#df65b0','#e7298a','#ce1256','#91003f'];
+
+            if(category == 'all demographics') {
+                let values = createDataBreaks(0, 8000, 8);
+                
+                let dataValue = parseInt(feature.properties.estimate);
+                let value = values.find(value => value > dataValue);
+
+                let index = values.indexOf(value);
+                // console.log(colors[index]);
+
+                return colors[index] || "#999";
+            } else {
+                let values = createDataBreaks(0, 4000, 8);
+
+                let dataValue = parseInt(feature.properties.estimate);
+                let value = values.find(value => value > dataValue);
+
+                let index = values.indexOf(value);
+
+                // console.log(colors[index]);
+
+                return colors[index] || "#999";
+            }
+        }
+
+        function createDataBreaks(min, max, classes) {
+            let range = (max - min) / classes;
+            let values = [];
+
+            for (let index = min; index <= max; index+=range) {
+                values.push(index);                
+            }
+
+            return values;
+        }
+
+
+        map.on("overlayadd", (layer) => {
+            // console.log(e);
+
+            if(layer.name == "Demographics") {
+                document.getElementById("layer-section").style.display = "block";
+            }
+        });
+
+        map.on("overlayremove", (layer) => {
+            // console.log(e);
+
+            if(layer.name == "Demographics") {
+                document.getElementById("layer-section").style.display = "none";
+            }
+        })
+
+
     </script>
 </body>
 </html>
